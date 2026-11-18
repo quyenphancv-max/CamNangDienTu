@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cẩm Nang Điện Tử - PNJ</title>
+    <style>
+        :root { --primary: #003366; --gold: #D4AF37; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; }
+        .header { text-align: center; color: var(--primary); margin-bottom: 30px; }
+        .search-bar { width: 100%; max-width: 500px; padding: 12px; margin: 0 auto 30px; display: block; border: 1px solid #ccc; border-radius: 25px; outline: none; }
+        
+        /* Giao diện danh sách (Main View) */
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 4px solid var(--gold); display: flex; flex-direction: column;}
+        .category { font-size: 0.85em; color: gray; text-transform: uppercase; letter-spacing: 1px; }
+        .title { color: var(--primary); font-size: 1.2em; margin: 10px 0; font-weight: bold; }
+        .date { font-size: 0.85em; color: #d9534f; margin-bottom: 10px; }
+        .desc { font-size: 0.9em; color: #555; flex-grow: 1; margin-bottom: 15px;}
+        .btn-download { display: inline-block; padding: 10px 20px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: 0.3s; border: none; cursor: pointer; font-size: 1em; text-align: center;}
+        .btn-download:hover { background-color: var(--gold); color: var(--primary); }
+
+        /* Giao diện chi tiết (Detail View) */
+        .detail-container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .btn-back { background: #f4f7f6; color: var(--primary); border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 0.9em; margin-bottom: 20px; transition: 0.2s; }
+        .btn-back:hover { background: #e0e5e4; }
+        .detail-title { color: var(--primary); font-size: 1.8em; margin-bottom: 5px; }
+        .detail-subtitle { color: gray; font-size: 0.9em; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+
+        /* Trục dọc Timeline (Stepper) */
+        .stepper { border-left: 3px solid var(--primary); margin-left: 15px; padding-left: 25px; margin-bottom: 30px; }
+        .step { position: relative; margin-bottom: 30px; }
+        .step::before { content: ''; position: absolute; left: -35px; top: 0; width: 14px; height: 14px; background: var(--gold); border-radius: 50%; border: 3px solid var(--primary); }
+        .step-title { font-weight: bold; color: var(--primary); font-size: 1.2em; margin-bottom: 10px; }
+        .step-content { font-size: 0.95em; color: #444; line-height: 1.6; }
+        .step-content ul { padding-left: 20px; margin-top: 5px; }
+        .step-content a { color: #d9534f; text-decoration: none; font-weight: 500; }
+        .step-content a:hover { text-decoration: underline; }
+
+        /* Hộp Lưu ý (Notes) */
+        .notes-box { background: #fff8e1; border-left: 4px solid var(--gold); padding: 15px 20px; border-radius: 5px; }
+        .notes-box h4 { color: #b8860b; margin-top: 0; margin-bottom: 10px; }
+        .notes-box ul { margin: 0; padding-left: 20px; font-size: 0.9em; color: #555; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>📚 CẨM NANG NGHIỆP VỤ</h1>
+        <p>Hệ thống tra cứu và tải tài liệu nội bộ</p>
+    </div>
+
+    <input type="text" id="searchInput" class="search-bar" placeholder="🔍 Nhập tên công văn, tài liệu cần tìm...">
+
+    <!-- Giao diện danh sách dạng lưới -->
+    <div class="grid-container" id="mainView">
+        <p style="text-align:center; grid-column: 1 / -1;" id="loadingText">Đang tải dữ liệu từ hệ thống...</p>
+    </div>
+
+    <!-- Giao diện chi tiết từng bước -->
+    <div id="detailView" class="detail-container" style="display: none;">
+        <button class="btn-back" onclick="goBack()">⬅ Quay lại danh sách</button>
+        
+        <h2 id="detailTitle" class="detail-title">Tên Quy Trình</h2>
+        <p id="detailSubtitle" class="detail-subtitle">Cập nhật: ...</p>
+
+        <div id="stepContainer" class="stepper"></div>
+
+        <div id="noteContainer" class="notes-box" style="display: none;">
+            <h4>Lưu ý quan trọng:</h4>
+            <div id="noteContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Đường link API Power Automate của bạn đã được gắn sẵn vào đây
+        const API_URL = 'https://default6ea838f0f529455e9738147060990b.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/03/workflows/1e38a0d008bc4fef9ef335ff00df6f21/triggers/manual/paths/invoke?api-version=1'; 
+        let documents = [];
+
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                // Trích xuất dữ liệu từ cấu trúc của Power Automate
+                documents = data.value || data; 
+                renderCards(documents);
+            } catch (error) {
+                document.getElementById('loadingText').innerText = 'Lỗi kết nối dữ liệu. Có thể do chặn bảo mật chéo (CORS).';
+                console.error("Lỗi:", error);
+            }
+        }
+
+        function renderCards(data) {
+            const container = document.getElementById('mainView');
+            container.innerHTML = '';
+            
+            if (data.length === 0) {
+                container.innerHTML = '<p style="text-align:center; grid-column: 1 / -1;">Không tìm thấy tài liệu nào.</p>';
+                return;
+            }
+
+            data.forEach((doc, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="category">${doc['Danh mục'] || 'Chung'}</div>
+                    <div class="title">${doc['Tên tài liệu'] || 'Không có tên'}</div>
+                    <div class="date">Cập nhật: ${doc['Ngày cập nhật'] || ''}</div>
+                    <p class="desc">${doc['Mô tả'] || ''}</p>
+                    <button class="btn-download" onclick="openDetail(${index})">Xem Chi Tiết / Tải</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function openDetail(index) {
+            const doc = documents[index];
+            
+            document.getElementById('mainView').style.display = 'none';
+            document.getElementById('detailView').style.display = 'block';
+            
+            document.getElementById('detailTitle').innerText = doc['Tên tài liệu'];
+            document.getElementById('detailSubtitle').innerText = `Cập nhật lần cuối: ${doc['Ngày cập nhật']}`;
+            
+            const stepContainer = document.getElementById('stepContainer');
+            if (doc['Nội dung chi tiết'] && doc['Nội dung chi tiết'].trim() !== "") {
+                stepContainer.innerHTML = doc['Nội dung chi tiết'];
+            } else {
+                stepContainer.innerHTML = `
+                    <div class="step">
+                        <div class="step-title">Tải tài liệu nguyên bản</div>
+                        <div class="step-content">
+                            <p>Tài liệu này không có hướng dẫn từng bước trên web. Vui lòng xem bản đầy đủ trên hệ thống.</p>
+                            <br>
+                            <a href="${doc['Link truy cập/Tải']}" target="_blank" class="btn-download" style="color:white; padding: 8px 15px;">Mở tài liệu OneDrive</a>
+                        </div>
+                    </div>`;
+            }
+
+            const noteBox = document.getElementById('noteContainer');
+            if (doc['Lưu ý'] && doc['Lưu ý'].trim() !== "") {
+                noteBox.style.display = 'block';
+                document.getElementById('noteContent').innerHTML = doc['Lưu ý'];
+            } else {
+                noteBox.style.display = 'none';
+            }
+        }
+
+        function goBack() {
+            document.getElementById('detailView').style.display = 'none';
+            document.getElementById('mainView').style.display = 'grid'; 
+        }
+
+        document.getElementById('searchInput').addEventListener('keyup', (e) => {
+            const keyword = e.target.value.toLowerCase();
+            const filtered = documents.filter(doc => 
+                (doc['Tên tài liệu'] && doc['Tên tài liệu'].toLowerCase().includes(keyword)) ||
+                (doc['Danh mục'] && doc['Danh mục'].toLowerCase().includes(keyword))
+            );
+            renderCards(filtered);
+        });
+
+        fetchData();
+    </script>
+</body>
+</html>
